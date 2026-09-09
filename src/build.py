@@ -91,15 +91,25 @@ def main(full: bool = False, smoke: bool = False) -> None:
     prices.to_parquet(DATA / "pld.parquet", index=False)
 
     if smoke:
-        # Teste rápido de conectividade: lista o bucket do ONS e monta a tabela
-        # de PLD, sem baixar mês nenhum. Serve para saber em 40 segundos se a
-        # CCEE está respondendo, em vez de descobrir depois de uma hora.
+        # Diagnóstico rápido: lista o bucket do ONS, testa cada porta de entrada
+        # da CCEE e monta a tabela de PLD, sem baixar mês nenhum. Sai sempre com
+        # sucesso — o objetivo é o relatório, não passar ou falhar.
         cob = prices["pld_fonte"].value_counts().to_dict() if not prices.empty else {}
-        print(f"SMOKE OK — {len(all_months)} meses no ONS ({all_months[0]} a {last_month}), "
-              f"{len(det_listing)} meses de detalhamento por usina")
-        print(f"SMOKE PLD — {len(prices):,} linhas, cobertura {cob}")
+        print("=" * 68)
+        print(f"ONS   — {len(all_months)} meses ({all_months[0]} a {last_month}), "
+              f"{len(det_listing)} meses de detalhamento por usina  → OK")
+        print("-" * 68)
+        print("CCEE  — o que este runner consegue alcançar:")
+        for rotulo, res in ccee.diagnostico():
+            print(f"        {rotulo:24s} {res}")
+        print("-" * 68)
+        print(f"PLD   — {len(prices):,} linhas na grade, cobertura {cob}")
         if not cob or set(cob) == {"indisponivel"}:
-            raise SystemExit("SMOKE FALHOU: nenhum preço da CCEE foi obtido")
+            print("VEREDITO: a CCEE está recusando este runner. O curtailment do ONS sai "
+                  "normalmente; o valor em R$ ficaria em branco.")
+        else:
+            print("VEREDITO: CCEE OK — pode rodar com full = true.")
+        print("=" * 68)
         return
 
     pld_status: dict[str, str] = {}
