@@ -189,7 +189,8 @@ FC_COLS = {
 
 def load_conjuntos(urls: list[str]) -> pd.DataFrame:
     """Build the conjunto master from one or more FATOR_CAPACIDADE-2 months."""
-    frames = []
+    frames: list[pd.DataFrame] = []
+    vistos, estaveis = -1, 0
     for url in urls:
         df = read_csv(url, usecols=lambda c: c in FC_COLS)
         df = df.rename(columns=FC_COLS)
@@ -202,8 +203,22 @@ def load_conjuntos(urls: list[str]) -> pd.DataFrame:
             .last()  # newest capacity / coordinates win
         )
         frames.append(df)
-    out = pd.concat(frames, ignore_index=True)
-    out = out.sort_values("capacidade_mw").groupby("id_ons", as_index=False).last()
+        # Os arquivos de fator de capacidade são grandes (um mês inteiro de dados
+        # horários por usina). Consolidamos a cada mês e paramos assim que dois
+        # meses seguidos não trouxerem nenhum conjunto novo — o que interessa
+        # aqui é só o cadastro (nome, coordenada, capacidade), não a série.
+        parcial = pd.concat(frames, ignore_index=True)
+        parcial = parcial.sort_values("capacidade_mw").groupby("id_ons", as_index=False).last()
+        frames = [parcial]
+        if len(parcial) == vistos:
+            estaveis += 1
+            if estaveis >= 2:
+                break
+        else:
+            estaveis, vistos = 0, len(parcial)
+    out = frames[0] if frames else pd.DataFrame()
+    if out.empty:
+        raise SystemExit("não consegui montar o cadastro de conjuntos (fator de capacidade)")
     out["fonte"] = out["tipo"].map({"Solar": "Solar", "Eólica": "Eólica"}).fillna(out["tipo"])
     return out
 

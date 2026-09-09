@@ -19,6 +19,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -63,6 +64,28 @@ DIA_RS = "K"
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
+def _cel(v):
+    """Converte um valor do pandas para algo que o openpyxl aceite.
+
+    O `pd.NA` (colunas que os arquivos antigos do ONS não têm), o `NaT` e o
+    `NaN` levantam ValueError na escrita da célula; e os escalares do numpy
+    inteiro/booleano não são reconhecidos como número. Tudo isso vira `None`
+    ou o tipo nativo equivalente.
+    """
+    if v is None or v is pd.NA or v is pd.NaT:
+        return None
+    if isinstance(v, float):
+        return None if v != v else v          # NaN
+    if isinstance(v, (np.integer,)):
+        return int(v)
+    if isinstance(v, (np.bool_,)):
+        return bool(v)
+    if isinstance(v, np.floating):
+        f = float(v)
+        return None if f != f else f
+    return v
+
+
 def _sheet(wb: Workbook, name: str):
     ws = wb.create_sheet(name)
     ws.sheet_view.showGridLines = False
@@ -93,7 +116,7 @@ def _table(ws, df: pd.DataFrame, start_row: int, formats: dict,
     _head(ws, list(df.columns), start_row, widths)
     for i, row in enumerate(df.itertuples(index=False, name=None), start=start_row + 1):
         for j, v in enumerate(row, start=1):
-            c = ws.cell(row=i, column=j, value=v)
+            c = ws.cell(row=i, column=j, value=_cel(v))
             c.font = BODY
             fmt = formats.get(df.columns[j - 1])
             if fmt:
@@ -356,7 +379,7 @@ def _write_hist(wb: Workbook, detail: pd.DataFrame) -> dict[str, dict]:
         # individual multiplicaria o tamanho do arquivo. A fonte vem do estilo
         # Normal (Arial), definido em write_excel.
         for row in g.itertuples(index=False, name=None):
-            ws.append(list(row))
+            ws.append([_cel(v) for v in row])
         fim = 2 + len(g)
         for c, fmt in (("din_instante", DTM), ("mwh_gerado", MWH), ("mwh_referencia", MWH),
                        ("mwh_gnr", MWH), ("pld", BRL), ("perda_rs", BRL),
@@ -477,7 +500,7 @@ def _usina_tabs(wb: Workbook, usinas: pd.DataFrame, taken: set[str]) -> dict:
         ws.column_dimensions[UC["nom_conjuntousina"]].width = 28
         ws.freeze_panes = "C3"
         for rec in g.itertuples(index=False, name=None):
-            ws.append(list(rec))
+            ws.append([_cel(v) for v in rec])
         fim = 2 + len(g)
         for c, fmt in (("data", DATE), ("mwh_gerado", MWH), ("mwh_referencia", MWH),
                        ("mwh_gnr", MWH), ("rs_gnr", BRL), ("minutos", INT)):

@@ -87,7 +87,7 @@ def main(full: bool = False, smoke: bool = False) -> None:
     # A aba de PLD do Excel começa em set/2023 mesmo que a série do ONS comece
     # depois, então a grade de preços nunca pode começar tarde demais.
     prices = ccee.build_price_table(min(first, PLD_INICIO),
-                                    pd.Timestamp.utcnow().tz_localize(None))
+                                    pd.Timestamp.now('UTC').tz_localize(None))
     prices.to_parquet(DATA / "pld.parquet", index=False)
 
     if smoke:
@@ -227,7 +227,7 @@ def main(full: bool = False, smoke: bool = False) -> None:
 
     # ------------------------------------------------- 5. conjunto master (map)
     fc = ons.months_available("fatorcap")
-    fc_months = list(fc)[-3:] if not full else list(fc)[-24:]
+    fc_months = list(fc)[-3:] if not full else list(fc)[-8:]
     conjuntos = ons.load_conjuntos([fc[m]["url"] for m in fc_months])
     conjuntos.to_parquet(DATA / "conjuntos.parquet", index=False)
 
