@@ -64,7 +64,7 @@ def month_key(ts: pd.Timestamp) -> str:
 
 
 # --------------------------------------------------------------------------
-def main(full: bool = False) -> None:
+def main(full: bool = False, smoke: bool = False) -> None:
     DATA.mkdir(exist_ok=True)
     DOCS.mkdir(exist_ok=True)
     (DOCS / "data").mkdir(exist_ok=True)
@@ -89,6 +89,18 @@ def main(full: bool = False) -> None:
     prices = ccee.build_price_table(min(first, PLD_INICIO),
                                     pd.Timestamp.utcnow().tz_localize(None))
     prices.to_parquet(DATA / "pld.parquet", index=False)
+
+    if smoke:
+        # Teste rápido de conectividade: lista o bucket do ONS e monta a tabela
+        # de PLD, sem baixar mês nenhum. Serve para saber em 40 segundos se a
+        # CCEE está respondendo, em vez de descobrir depois de uma hora.
+        cob = prices["pld_fonte"].value_counts().to_dict() if not prices.empty else {}
+        print(f"SMOKE OK — {len(all_months)} meses no ONS ({all_months[0]} a {last_month}), "
+              f"{len(det_listing)} meses de detalhamento por usina")
+        print(f"SMOKE PLD — {len(prices):,} linhas, cobertura {cob}")
+        if not cob or set(cob) == {"indisponivel"}:
+            raise SystemExit("SMOKE FALHOU: nenhum preço da CCEE foi obtido")
+        return
 
     pld_status: dict[str, str] = {}
     for mes, g in prices.assign(mes=prices["hora"].map(month_key)).groupby("mes"):
@@ -222,5 +234,7 @@ def main(full: bool = False) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--full", action="store_true", help="rebuild the whole history")
+    ap.add_argument("--full", action="store_true", help="reconstrói todo o histórico")
+    ap.add_argument("--smoke", action="store_true",
+                    help="só testa o acesso ao ONS e à CCEE e sai")
     main(**vars(ap.parse_args()))

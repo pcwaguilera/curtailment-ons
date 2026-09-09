@@ -11,6 +11,10 @@ on:
         description: "Reprocessar todo o historico (demora ~30-60 min)"
         type: boolean
         default: false
+      smoke:
+        description: "So testar o acesso ao ONS e a CCEE (~40s) e sair"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,13 +41,16 @@ jobs:
 
       - name: Construir
         run: |
-          if [ "${{ inputs.full }}" = "true" ]; then
+          if [ "${{ inputs.smoke }}" = "true" ]; then
+            python -m src.build --smoke
+          elif [ "${{ inputs.full }}" = "true" ]; then
             python -m src.build --full
           else
             python -m src.build
           fi
 
       - name: Commitar dados e site
+        if: inputs.smoke != true
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -52,8 +59,11 @@ jobs:
           git push
 
       - uses: actions/configure-pages@v5
+        if: inputs.smoke != true
       - uses: actions/upload-pages-artifact@v3
+        if: inputs.smoke != true
         with:
           path: docs
       - id: deploy
+        if: inputs.smoke != true
         uses: actions/deploy-pages@v4

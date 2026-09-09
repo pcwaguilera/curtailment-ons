@@ -20,19 +20,44 @@ from datetime import datetime
 
 import pandas as pd
 
-from .fetch import get
+from .fetch import UA, get
 from .sources import CCEE_CKAN, CCEE_PLD_WEEKLY, SUBMERCADO_MAP
 
 
+_SESSION = None
+
+
+def _sessao() -> "requests.Session":
+    """Sessão aquecida: o WAF da CCEE costuma exigir uma visita à home antes.
+
+    A primeira requisição ao portal recebe os cookies do firewall; sem eles as
+    chamadas de API são recusadas com 403 quando vêm de um datacenter.
+    """
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
+    import requests
+
+    s = requests.Session()
+    s.headers.update(UA)
+    try:
+        s.get(CCEE_CKAN, timeout=60)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! não consegui aquecer a sessão da CCEE ({exc})")
+    s.headers.update({"Referer": CCEE_CKAN + "/", "X-Requested-With": "XMLHttpRequest"})
+    _SESSION = s
+    return s
+
+
 def _package(pkg: str) -> dict:
-    r = get(f"{CCEE_CKAN}/api/3/action/package_show?id={pkg}")
+    r = get(f"{CCEE_CKAN}/api/3/action/package_show?id={pkg}", session=_sessao())
     return r.json()["result"]
 
 
 def _dump(resource_id: str) -> pd.DataFrame:
     """Read a CKAN datastore resource as CSV."""
     url = f"{CCEE_CKAN}/datastore/dump/{resource_id}"
-    raw = get(url).content
+    raw = get(url, session=_sessao()).content
     for sep in (",", ";"):
         try:
             df = pd.read_csv(io.BytesIO(raw), sep=sep, low_memory=False)
@@ -127,8 +152,20 @@ def build_price_table(first: datetime, last: datetime) -> pd.DataFrame:
     carried across the remaining hours, flagged ``semanal_media``.
     """
     years = list(range(first.year, last.year + 1))
-    hourly = load_pld_horario(years)
-    weekly = load_pld_semanal(years)
+
+    # O PLD é enriquecimento: se a CCEE estiver fora do ar ou mudar o formato, o
+    # build segue com os dados do ONS e o valor em R$ fica em branco, marcado
+    # como indisponível. Não vale derrubar a apuração inteira por causa do preço.
+    try:
+        hourly = load_pld_horario(years)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! PLD horário indisponível ({exc}); seguindo sem ele")
+        hourly = pd.DataFrame(columns=["hora", "submercado", "pld", "pld_fonte"])
+    try:
+        weekly = load_pld_semanal(years)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ! PLD semanal indisponível ({exc}); seguindo sem ele")
+        weekly = pd.DataFrame(columns=["semana_inicio", "submercado", "pld"])
 
     idx = pd.MultiIndex.from_product(
         [
@@ -138,9 +175,18 @@ def build_price_table(first: datetime, last: datetime) -> pd.DataFrame:
         names=["hora", "submercado"],
     )
     grid = pd.DataFrame(index=idx).reset_index()
-    grid = grid.merge(hourly, on=["hora", "submercado"], how="left")
+    if hourly.empty:
+        # Um merge com frame vazio quebra por dtype (object × datetime64).
+        grid["pld"] = pd.Series(dtype="float64")
+        grid["pld_fonte"] = pd.Series(dtype="object")
+    else:
+        hourly = hourly.copy()
+        hourly["hora"] = pd.to_datetime(hourly["hora"])
+        grid = grid.merge(hourly, on=["hora", "submercado"], how="left")
 
     if not weekly.empty:
+        weekly = weekly.copy()
+        weekly["semana_inicio"] = pd.to_datetime(weekly["semana_inicio"])
         weekly = weekly.sort_values("semana_inicio")
         grid = grid.sort_values("hora")
         filled = []
@@ -174,10 +220,16 @@ def apply_price(df: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
     (MWh x PLD).  It is an opportunity-cost figure, not the constrained-off
     compensation actually settled by CCEE - see the README.
     """
-    out = df.merge(
-        prices.rename(columns={"submercado": "id_subsistema"}),
-        on=["hora", "id_subsistema"],
-        how="left",
-    )
+    if prices is None or prices.empty:
+        out = df.copy()
+        out["pld"] = float("nan")
+        out["pld_fonte"] = "indisponivel"
+    else:
+        out = df.merge(
+            prices.rename(columns={"submercado": "id_subsistema"}),
+            on=["hora", "id_subsistema"],
+            how="left",
+        )
+        out["pld_fonte"] = out["pld_fonte"].fillna("indisponivel")
     out["rs_gnr"] = out["mwh_gnr"] * out["pld"]
     return out
