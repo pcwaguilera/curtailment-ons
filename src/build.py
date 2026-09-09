@@ -16,8 +16,8 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from . import ccee, ons
-from .excel_report import write_excel
+from . import ccee, condicionantes, ons
+from .excel_report import PLD_INICIO, write_excel
 from .fetch import State
 from .site_build import write_site
 from .sources import ONS_DATASETS, ONS_S3
@@ -37,16 +37,26 @@ def load_config() -> dict:
     return {}
 
 
-def _read_parquet(p: Path) -> pd.DataFrame:
-    return pd.read_parquet(p) if p.exists() else pd.DataFrame()
+# As tabelas processadas ficam particionadas por mês (data/<nome>/YYYY_MM.parquet).
+# Um arquivo único seria reescrito inteiro todo dia e o histórico do Git cresceria
+# dezenas de MB por execução; assim só o mês que mudou entra no commit.
+def _read_partitions(folder: Path) -> pd.DataFrame:
+    if not folder.exists():
+        return pd.DataFrame()
+    parts = [pd.read_parquet(p) for p in sorted(folder.glob("*.parquet"))]
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
 
 
-def _replace_months(old: pd.DataFrame, new: pd.DataFrame, months: set[str]) -> pd.DataFrame:
-    """Drop the given YYYY_MM partitions from `old` and append `new`."""
-    if old.empty:
-        return new
-    keep = old[~old["mes"].isin(months)]
-    return pd.concat([keep, new], ignore_index=True)
+def _write_partitions(folder: Path, df: pd.DataFrame, months: set[str]) -> None:
+    """Grava (ou apaga) apenas as partições dos meses reprocessados."""
+    folder.mkdir(parents=True, exist_ok=True)
+    for mes in months:
+        part = folder / f"{mes}.parquet"
+        chunk = df[df["mes"] == mes] if not df.empty else df
+        if chunk is None or chunk.empty:
+            part.unlink(missing_ok=True)
+        else:
+            chunk.to_parquet(part, index=False)
 
 
 def month_key(ts: pd.Timestamp) -> str:
@@ -61,10 +71,12 @@ def main(full: bool = False) -> None:
 
     cfg = load_config()
     selected = [str(x).strip() for x in (cfg.get("conjuntos_solar") or [])]
+    usinas_de = [str(x).strip() for x in (cfg.get("usinas_detalhe") or [])]
     state = State(DATA / "state.json")
 
     # ---------------------------------------------------------------- 1. index
     listing = {ds: ons.months_available(ds) for ds in TM_SETS}
+    det_listing = ons.months_available("solar_detail") if usinas_de else {}
     all_months = sorted({m for d in listing.values() for m in d})
     if not all_months:
         raise SystemExit("ONS listing came back empty - aborting without touching data/")
@@ -72,7 +84,10 @@ def main(full: bool = False) -> None:
     last_month = all_months[-1]
 
     # ---------------------------------------------------- 2. prices (rebuilt daily)
-    prices = ccee.build_price_table(first, pd.Timestamp.utcnow().tz_localize(None))
+    # A aba de PLD do Excel começa em set/2023 mesmo que a série do ONS comece
+    # depois, então a grade de preços nunca pode começar tarde demais.
+    prices = ccee.build_price_table(min(first, PLD_INICIO),
+                                    pd.Timestamp.utcnow().tz_localize(None))
     prices.to_parquet(DATA / "pld.parquet", index=False)
 
     pld_status: dict[str, str] = {}
@@ -96,17 +111,23 @@ def main(full: bool = False) -> None:
                 d.add(mes)  # ONS republished the file
             elif prev_status.get(mes) != pld_status.get(mes):
                 d.add(mes)  # CCEE published a better price for that month
+            elif (ds == "solar_tm" and mes in det_listing
+                  and state.etag("solar_detail", mes) != det_listing[mes]["etag"]):
+                d.add(mes)  # o arquivo por usina mudou; precisamos do TM junto
         dirty[ds] = d
 
     print(f"months to (re)process: " + ", ".join(f"{k}={len(v)}" for k, v in dirty.items()))
 
     # ------------------------------------------------------------ 4. process
-    daily_old = _read_parquet(DATA / "agg_daily.parquet")
-    detail_old = _read_parquet(DATA / "detail_selected.parquet")
+    DAILY_DIR = DATA / "agg_daily"
+    DETAIL_DIR = DATA / "detail_selected"
+    USINA_DIR = DATA / "usinas_daily"
     if full:
-        daily_old, detail_old = pd.DataFrame(), pd.DataFrame()
+        for folder in (DAILY_DIR, DETAIL_DIR, USINA_DIR):
+            for p in folder.glob("*.parquet") if folder.exists() else []:
+                p.unlink()
 
-    daily_new, detail_new = [], []
+    daily_new, detail_new, usina_new = [], [], []
     for ds, fonte in TM_SETS.items():
         for mes in sorted(dirty[ds]):
             meta = listing[ds][mes]
@@ -131,30 +152,54 @@ def main(full: bool = False) -> None:
             daily_new.append(d)
 
             if fonte == "Solar" and selected:
+                # Guardamos TODOS os patamares dos conjuntos selecionados, não só os
+                # restritos: a geração e a geração esperada mensais precisam do mês
+                # inteiro, e o recálculo das condicionantes precisa dos campos de
+                # limitação e disponibilidade patamar a patamar.
                 sel = df[df["id_ons"].isin(selected) | df["nom_usina"].isin(selected)]
-                sel = sel[sel["restrito"] | (sel["mwh_gnr"] > 0)]
                 if not sel.empty:
-                    detail_new.append(sel)
+                    detail_new.append(condicionantes.aplicar(sel))
+
+            # ---- detalhamento por usina (base diária) -----------------------
+            if fonte == "Solar" and usinas_de and mes in det_listing:
+                dmeta = det_listing[mes]
+                print(f"     + usinas {mes} ({dmeta['size']/1e6:.1f} MB)")
+                det = ons.load_detail(dmeta["url"], usinas_de)
+                if not det.empty:
+                    det = ons.merge_detail_razao(det, df)
+                    det = ccee.apply_price(det, prices)
+                    u = ons.aggregate_daily_usina(det)
+                    u["mes"] = mes
+                    usina_new.append(u)
+                state.set_etag("solar_detail", mes, dmeta["etag"])
 
             state.set_etag(ds, mes, meta["etag"])
 
-    daily = _replace_months(
-        daily_old, pd.concat(daily_new, ignore_index=True) if daily_new else pd.DataFrame(),
+    _write_partitions(
+        DAILY_DIR,
+        pd.concat(daily_new, ignore_index=True) if daily_new else pd.DataFrame(),
         {m for s in dirty.values() for m in s},
     )
-    detail = _replace_months(
-        detail_old, pd.concat(detail_new, ignore_index=True) if detail_new else pd.DataFrame(),
+    _write_partitions(
+        DETAIL_DIR,
+        pd.concat(detail_new, ignore_index=True) if detail_new else pd.DataFrame(),
         dirty["solar_tm"],
     )
+    _write_partitions(
+        USINA_DIR,
+        pd.concat(usina_new, ignore_index=True) if usina_new else pd.DataFrame(),
+        dirty["solar_tm"],
+    )
+    daily = _read_partitions(DAILY_DIR)
+    detail = _read_partitions(DETAIL_DIR)
+    usinas = _read_partitions(USINA_DIR)
 
     if daily.empty:
         raise SystemExit("no aggregated data produced - aborting")
 
     daily = daily.sort_values(["fonte", "id_ons", "data"]).reset_index(drop=True)
-    daily.to_parquet(DATA / "agg_daily.parquet", index=False)
     if not detail.empty:
         detail = detail.sort_values(["id_ons", "din_instante"]).reset_index(drop=True)
-        detail.to_parquet(DATA / "detail_selected.parquet", index=False)
 
     # ------------------------------------------------- 5. conjunto master (map)
     fc = ons.months_available("fatorcap")
@@ -164,7 +209,7 @@ def main(full: bool = False) -> None:
 
     # ------------------------------------------------------------ 6. outputs
     xlsx = DOCS / "curtailment_solar.xlsx"
-    write_excel(xlsx, daily, detail, conjuntos, selected, prices)
+    write_excel(xlsx, daily, detail, conjuntos, selected, prices, usinas)
     write_site(DOCS, daily, conjuntos, prices, selected, xlsx.name)
 
     state.save(

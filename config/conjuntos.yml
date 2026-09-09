@@ -1,18 +1,30 @@
-# Conjuntos fotovoltaicos que entram no Excel.
+# Os conjuntos da Luly.
 #
-# Use o id_ons (recomendado — é estável) ou o nome exato do conjunto como o ONS
-# publica. Os dois funcionam; o id_ons não muda se o ONS renomear a usina.
+# Fixados pelo id_ons, que é estável: o ONS às vezes muda a grafia do nome
+# (Banabuiu/Banabuiú, Jaiba/Jaíba, "(dist)"/"(Distribuição)") e o id continua o
+# mesmo. Também aceita nome exato, mas o id é mais seguro.
 #
-# Para descobrir os ids, abra o dashboard, filtre por Solar e olhe a coluna
-# "Conjunto" — ou baixe o CSV da tabela, que traz id_ons em cada linha.
+# O Excel sai com TODOS os conjuntos fotovoltaicos; estes aqui ganham a aba
+# "Meus conjuntos" e são os únicos com detalhe semi-horário.
 #
-# Deixe a lista vazia e o Excel sai com todos os conjuntos fotovoltaicos.
-# Depois de mudar esta lista, rode o workflow com "full = true" uma vez, para
-# reconstruir o detalhe semi-horário dos conjuntos novos.
+# Depois de mexer nesta lista, rode o workflow uma vez com full = true, para
+# reconstruir o semi-horário dos conjuntos novos.
 
 conjuntos_solar:
-  # - CJU_MGJAN        # Conj. Janaúba
-  # - CJU_MGARN        # Conj. Arinos 2 500 kV
-  # - CJU_RNASO        # Conj. Assu Sol
-  # - CJU_PI5FGID      # Conj. Gilbués II 500 kV
-  # - CJU_BABRD        # Conj. Barreiras II 500 kV
+  - CJU_PECIR      # Conj. Ciranda            — PE, 244,5 MW
+  - CJU_CEPTN      # Conj. Banabuiú           — CE, 230 MW
+  - CJU_CELAV      # Conj. Lavras             — CE, 201 MW
+  - CJU_MGFSA      # Conj. Francisco Sá       — MG, 99 MW
+  - CJU_MGUJAI     # Conj. Jaíba 4 (Distribuição) — MG, 128,5 MW
+  - CJU_MGJAI3     # Conj. Jaiba 138 kV       — MG, 120 MW
+  - CJU_PIFMRG     # Conj. Marangatu          — PI, 360 MW
+  # - CJU_MGSDJ    # Conj. Jaíba V — MG, 500 MW (descomente se também for seu)
+
+# Conjuntos que ganham o detalhamento usina por usina (dataset *_detail).
+# Cada usina vira uma aba de histórico diário, mais uma aba de resumo mensal.
+# Manter a lista curta: são 22 usinas nestes quatro conjuntos.
+usinas_detalhe:
+  - CJU_PECIR      # Ciranda — 6 usinas (Ciranda 1-3, Xaxado 1-3)
+  - CJU_MGJAI3     # Jaiba 138 kV — 4 usinas (Jaíba N, NE1, NO1, O)
+  - CJU_MGUJAI     # Jaíba 4 (Distribuição) — 4 usinas (Jaíba 3, 4, 9, SE1)
+  - CJU_CELAV      # Lavras — 8 usinas (Lavras 1-8)

@@ -5,3 +5,11 @@ _sample_*.psv
 _payload.json
 _shot*.png
 _crop*.png
+_sm/
+_p/
+
+# A planilha é grande (dezenas de MB) e é regerada a cada execução. Se fosse
+# commitada, o histórico do Git cresceria o tamanho dela por dia. Ela vai para
+# o GitHub Pages direto do workspace do workflow, e fica disponível em
+# https://<usuario>.github.io/<repo>/curtailment_solar.xlsx
+docs/*.xlsx
