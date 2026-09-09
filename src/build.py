@@ -96,8 +96,10 @@ def main(full: bool = False, smoke: bool = False) -> None:
         # sucesso — o objetivo é o relatório, não passar ou falhar.
         cob = prices["pld_fonte"].value_counts().to_dict() if not prices.empty else {}
         print("=" * 68)
-        print(f"ONS   — {len(all_months)} meses ({all_months[0]} a {last_month}), "
-              f"{len(det_listing)} meses de detalhamento por usina  → OK")
+        for ds in TM_SETS:
+            ms = sorted(listing[ds])
+            print(f"ONS   — {ds:10s} {len(ms):3d} arquivos ({ms[0]} a {ms[-1]})  → OK")
+        print(f"ONS   — {'detalhe':10s} {len(det_listing):3d} arquivos por usina  → OK")
         print("-" * 68)
         print("CCEE  — o que este runner consegue alcançar:")
         for rotulo, res in ccee.diagnostico():

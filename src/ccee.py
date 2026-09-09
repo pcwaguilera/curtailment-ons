@@ -49,6 +49,35 @@ def _sessao() -> "requests.Session":
     return s
 
 
+def diagnostico() -> list[tuple[str, str]]:
+    """Testa cada porta de entrada da CCEE e devolve [(url, resultado)].
+
+    Serve para descobrir, de dentro do runner, se o bloqueio é do WAF em toda a
+    origem ou só em alguns caminhos — e se algum host alternativo responde.
+    """
+    import requests
+
+    alvos = [
+        (CCEE_CKAN + "/", "home do portal"),
+        (CCEE_CKAN + "/api/3/action/status_show", "API CKAN (status)"),
+        (CCEE_CKAN + "/api/3/action/package_show?id=pld_horario_submercado", "API CKAN (package)"),
+        (CCEE_CKAN + "/dataset/pld_horario_submercado", "página do dataset"),
+        ("https://pda-download.ccee.org.br/6pVzKbCKRHaGCCjrBbK29A/content", "download direto"),
+    ]
+    s = _sessao()
+    out = []
+    for url, rotulo in alvos:
+        try:
+            r = s.get(url, timeout=45, stream=True)
+            amostra = next(r.iter_content(200), b"")[:80]
+            out.append((rotulo, f"HTTP {r.status_code} · {r.headers.get('content-type','?')} "
+                                f"· {amostra[:60]!r}"))
+            r.close()
+        except Exception as exc:  # noqa: BLE001
+            out.append((rotulo, f"ERRO {type(exc).__name__}: {exc}"))
+    return out
+
+
 def _package(pkg: str) -> dict:
     r = get(f"{CCEE_CKAN}/api/3/action/package_show?id={pkg}", session=_sessao())
     return r.json()["result"]
