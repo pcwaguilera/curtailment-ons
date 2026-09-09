@@ -16,6 +16,7 @@ Both are exposed through the portal's CKAN datastore, which we read with the
 from __future__ import annotations
 
 import io
+from pathlib import Path
 from datetime import datetime
 
 import pandas as pd
@@ -174,6 +175,70 @@ def load_pld_semanal(years: list[int]) -> pd.DataFrame:
     )
 
 
+# --------------------------------------------------------------------------
+# snapshot local
+# --------------------------------------------------------------------------
+# A CCEE bloqueia por faixa de IP: do runner do GitHub toda a origem responde
+# 403 ("Acesso bloqueado"), inclusive o host de download. Como o PLD horário só
+# muda uma vez por mês, quando a contabilidade fecha, a série fica versionada
+# aqui e é atualizada a partir de uma máquina que a CCEE aceita.
+PLD_DIR = Path(__file__).resolve().parent.parent / "data" / "pld"
+PLD_HORARIO_CSV = PLD_DIR / "pld_horario.csv"      # hora,N,NE,S,SE  (wide)
+PLD_SEMANAL_CSV = PLD_DIR / "pld_semanal.csv"      # semana,submercado,pld
+
+
+def snapshot_horario() -> pd.DataFrame:
+    """Lê o snapshot horário versionado -> [hora, submercado, pld, pld_fonte]."""
+    if not PLD_HORARIO_CSV.exists():
+        return pd.DataFrame(columns=["hora", "submercado", "pld", "pld_fonte"])
+    w = pd.read_csv(PLD_HORARIO_CSV)
+    w["hora"] = pd.to_datetime(w["hora"], format="%Y-%m-%dT%H", errors="coerce")
+    w = w.dropna(subset=["hora"])
+    d = w.melt(id_vars="hora", value_vars=["N", "NE", "S", "SE"],
+               var_name="submercado", value_name="pld").dropna(subset=["pld"])
+    d["pld"] = pd.to_numeric(d["pld"], errors="coerce")
+    d["pld_fonte"] = "horario"
+    return d.dropna(subset=["pld"])
+
+
+def snapshot_semanal() -> pd.DataFrame:
+    if not PLD_SEMANAL_CSV.exists():
+        return pd.DataFrame(columns=["semana_inicio", "submercado", "pld"])
+    d = pd.read_csv(PLD_SEMANAL_CSV)
+    d["semana_inicio"] = pd.to_datetime(d["semana"], errors="coerce")
+    d["pld"] = pd.to_numeric(d["pld"], errors="coerce")
+    return d.dropna(subset=["semana_inicio", "pld"])[["semana_inicio", "submercado", "pld"]]
+
+
+def salvar_snapshot(hourly: pd.DataFrame, weekly: pd.DataFrame) -> None:
+    """Regrava os arquivos versionados a partir do que veio da rede."""
+    PLD_DIR.mkdir(parents=True, exist_ok=True)
+    if not hourly.empty:
+        w = hourly.pivot_table(index="hora", columns="submercado", values="pld",
+                               aggfunc="last").reset_index()
+        for s in ("N", "NE", "S", "SE"):
+            if s not in w.columns:
+                w[s] = pd.NA
+        w = w[["hora", "N", "NE", "S", "SE"]].sort_values("hora")
+        w["hora"] = w["hora"].dt.strftime("%Y-%m-%dT%H")
+        w.to_csv(PLD_HORARIO_CSV, index=False)
+    if not weekly.empty:
+        s = weekly.rename(columns={"semana_inicio": "semana"}).sort_values(
+            ["semana", "submercado"])
+        s["semana"] = pd.to_datetime(s["semana"]).dt.strftime("%Y-%m-%d")
+        s[["semana", "submercado", "pld"]].to_csv(PLD_SEMANAL_CSV, index=False)
+
+
+def _combinar(snap: pd.DataFrame, rede: pd.DataFrame, chaves: list[str]) -> pd.DataFrame:
+    """Rede por cima do snapshot (mais fresca), snapshot preenchendo o resto."""
+    if rede.empty:
+        return snap
+    if snap.empty:
+        return rede
+    return (pd.concat([snap, rede], ignore_index=True)
+            .drop_duplicates(chaves, keep="last"))
+
+
 def build_price_table(first: datetime, last: datetime) -> pd.DataFrame:
     """One row per hour x submercado covering [first, last], with a source flag.
 
@@ -185,16 +250,31 @@ def build_price_table(first: datetime, last: datetime) -> pd.DataFrame:
     # O PLD é enriquecimento: se a CCEE estiver fora do ar ou mudar o formato, o
     # build segue com os dados do ONS e o valor em R$ fica em branco, marcado
     # como indisponível. Não vale derrubar a apuração inteira por causa do preço.
+    hourly, weekly = snapshot_horario(), snapshot_semanal()
+    if not hourly.empty:
+        print(f"  · PLD do snapshot: horário até {hourly['hora'].max():%d/%m/%Y}, "
+              f"semanal até {weekly['semana_inicio'].max():%d/%m/%Y}"
+              if not weekly.empty else "  · PLD do snapshot (só horário)")
+
+    # Se esta máquina alcançar a CCEE (roda local, não no runner), atualiza o
+    # snapshot na hora. No GitHub Actions isso falha com 403 e seguimos com o
+    # arquivo versionado.
     try:
-        hourly = load_pld_horario(years)
+        rede_h = load_pld_horario(years)
+        hourly = _combinar(hourly, rede_h, ["hora", "submercado"])
+        atualizou = not rede_h.empty
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! PLD horário indisponível ({exc}); seguindo sem ele")
-        hourly = pd.DataFrame(columns=["hora", "submercado", "pld", "pld_fonte"])
+        print(f"  ! CCEE inacessível para o PLD horário ({exc}); usando o snapshot")
+        atualizou = False
     try:
-        weekly = load_pld_semanal(years)
+        rede_s = load_pld_semanal(years)
+        weekly = _combinar(weekly, rede_s, ["semana_inicio", "submercado"])
+        atualizou = atualizou or not rede_s.empty
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! PLD semanal indisponível ({exc}); seguindo sem ele")
-        weekly = pd.DataFrame(columns=["semana_inicio", "submercado", "pld"])
+        print(f"  ! CCEE inacessível para o PLD semanal ({exc}); usando o snapshot")
+    if atualizou:
+        salvar_snapshot(hourly, weekly)
+        print("  · snapshot de PLD atualizado a partir da CCEE")
 
     idx = pd.MultiIndex.from_product(
         [

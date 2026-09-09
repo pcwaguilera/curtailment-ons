@@ -36,8 +36,8 @@ publicados no GitHub Pages.
 | Constrained-off eólica, por usina | [ONS `restricao_coff_eolica_detail`](https://dados.ons.org.br/dataset/restricao_coff_eolica_detail) | out/2021 → hoje |
 | Constrained-off eólica intra-semi-hora | [ONS `coff_eolica_usi_intrasemihora`](https://dados.ons.org.br/dataset/coff_eolica_usi_intrasemihora) | jan/2026 → hoje |
 | Latitude/longitude e capacidade instalada dos conjuntos | [ONS `fator-capacidade-2`](https://dados.ons.org.br/dataset/fator-capacidade-2) | 2021 → hoje |
-| PLD horário por submercado | [CCEE `pld_horario_submercado`](https://dadosabertos.ccee.org.br/dataset/pld_horario_submercado) | 2023 → último mês fechado |
-| PLD médio semanal (preenche o mês em aberto) | [CCEE `pld_media_semanal`](https://dadosabertos.ccee.org.br/dataset/pld_media_semanal) | 2023 → semana passada |
+| PLD horário por submercado | [CCEE `pld_horario_submercado`](https://dadosabertos.ccee.org.br/dataset/pld_horario_submercado), via snapshot em `data/pld/` | mai/2023 → último mês fechado |
+| PLD médio semanal (preenche o mês em aberto) | [CCEE `pld_media_semanal`](https://dadosabertos.ccee.org.br/dataset/pld_media_semanal), via snapshot | 2023 → semana passada |
 
 Tudo sob licença CC-BY. O ONS avisa que os dados passam por consistência recorrente
 e **podem mudar depois de publicados** — por isso o pipeline recarrega qualquer mês
@@ -132,6 +132,36 @@ interpretação mudar.
 > publicada — que é onde o item 5.2.2.10 começa. O ONS calcula essa referência por
 > função de produtividade e faz o rateio por usina do item 5.2.2.11. Diferenças contra
 > a apuração oficial são esperadas.
+
+## Por que o PLD vem de um snapshot
+
+A CCEE **bloqueia a faixa de IP do GitHub Actions**: do runner, toda a origem
+`dadosabertos.ccee.org.br` responde `403 Acesso bloqueado` — a home, as três rotas de
+API, a página do dataset e até o host separado de download. Não é cabeçalho nem
+user-agent; é decisão de firewall por origem de rede. (Rode o workflow com
+`smoke = true` para ver o diagnóstico completo.)
+
+Como o PLD horário só muda **uma vez por mês**, quando a contabilidade fecha, a série
+fica versionada no repositório:
+
+```
+data/pld/pld_horario.csv    hora,N,NE,S,SE      — uma linha por hora
+data/pld/pld_semanal.csv    semana,submercado,pld
+```
+
+O pipeline lê esses arquivos e, **se a máquina alcançar a CCEE** (rodando local, fora do
+runner), atualiza o snapshot automaticamente e segue. No GitHub Actions o acesso falha,
+o aviso aparece no log e o snapshot é usado como está.
+
+Para atualizar a série, rode uma vez por mês em uma máquina que a CCEE aceite:
+
+```bash
+python -m src.build --smoke     # busca o PLD e regrava data/pld/*.csv
+git add data/pld && git commit -m "pld: atualiza snapshot" && git push
+```
+
+Enquanto o snapshot não for atualizado, as horas além dele ficam com PLD
+`indisponivel` e o valor em R$ em branco — nunca com um preço inventado.
 
 ### O atraso do PLD
 

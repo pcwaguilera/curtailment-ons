@@ -13,3 +13,10 @@ _p/
 # o GitHub Pages direto do workspace do workflow, e fica disponível em
 # https://<usuario>.github.io/<repo>/curtailment_solar.xlsx
 docs/*.xlsx
+
+# Derivado do snapshot em data/pld/ + código: reescrito a cada execução, não
+# faz sentido versionar (seria ~1 MB de churn por dia no histórico do Git).
+data/pld.parquet
+
+# macOS
+.DS_Store
