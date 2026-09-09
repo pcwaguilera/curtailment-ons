@@ -1,0 +1,520 @@
+<title>Curtailment no SIN</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  --ground:#EBEFF4; --surface:#FFFFFF; --surface-2:#F5F8FB; --sunk:#E2E8F0;
+  --ink:#101923; --ink-2:#4E5F70; --ink-3:#77879A; --line:#D3DCE6;
+  --accent:#2F4E92; --accent-soft:#E4EAF7;
+  --rel:#4C6FBF; --cnf:#2E8B84; --ene:#C08A22; --par:#8B5A9C;
+  --solar:#D99A17; --eolica:#3782A0;
+  --warn:#A8631A; --warn-bg:#FBF0DE;
+  --shadow:0 1px 2px rgba(16,25,35,.06), 0 8px 24px -12px rgba(16,25,35,.18);
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D131A; --surface:#151D26; --surface-2:#1A2430; --sunk:#101820;
+    --ink:#E3EAF2; --ink-2:#9CACBC; --ink-3:#71828F; --line:#28333F;
+    --accent:#8AA6E8; --accent-soft:#1D2941;
+    --rel:#7A99DE; --cnf:#4FB3A9; --ene:#DFAE4E; --par:#B183C0;
+    --solar:#EAB23C; --eolica:#5CAFCC;
+    --warn:#E0B168; --warn-bg:#2B2313;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D131A; --surface:#151D26; --surface-2:#1A2430; --sunk:#101820;
+  --ink:#E3EAF2; --ink-2:#9CACBC; --ink-3:#71828F; --line:#28333F;
+  --accent:#8AA6E8; --accent-soft:#1D2941;
+  --rel:#7A99DE; --cnf:#4FB3A9; --ene:#DFAE4E; --par:#B183C0;
+  --solar:#EAB23C; --eolica:#5CAFCC;
+  --warn:#E0B168; --warn-bg:#2B2313;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 28px -16px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1220px; margin:0 auto; padding:28px 20px 64px}
+h1,h2,h3{font-family:"IBM Plex Serif",Georgia,serif; margin:0; text-wrap:balance}
+h1{font-size:30px; font-weight:600; letter-spacing:-.01em}
+h2{font-size:17px; font-weight:600}
+.num{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums}
+
+/* ---------- header ---------- */
+header{display:flex; flex-wrap:wrap; gap:18px; align-items:flex-end; justify-content:space-between; margin-bottom:22px}
+.lede{color:var(--ink-2); max-width:62ch; margin:8px 0 0}
+.meta{display:flex; gap:18px; flex-wrap:wrap; margin-top:10px; color:var(--ink-3); font-size:12.5px}
+.meta b{color:var(--ink-2); font-weight:500}
+.actions{display:flex; gap:8px; flex-wrap:wrap}
+.btn{
+  display:inline-flex; align-items:center; gap:7px; padding:8px 13px; border-radius:8px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink);
+  font:inherit; font-size:13px; cursor:pointer; text-decoration:none;
+}
+.btn:hover{border-color:var(--accent); color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+:root[data-theme="dark"] .btn.primary, :root:not([data-theme="light"]) .btn.primary{color:#0D131A}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .btn.primary{color:#fff}}
+
+/* ---------- stat strip ---------- */
+.stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:1px;
+  background:var(--line); border:1px solid var(--line); border-radius:var(--r); overflow:hidden; margin-bottom:20px}
+.stat{background:var(--surface); padding:15px 17px}
+.stat .k{font-size:11.5px; color:var(--ink-3); letter-spacing:.03em}
+.stat .v{font-size:25px; font-weight:500; margin-top:5px; letter-spacing:-.02em}
+.stat .v.txt{font-family:"IBM Plex Serif",Georgia,serif; font-size:22px}
+.stat .u{font-size:13px; color:var(--ink-3); margin-left:3px}
+.stat .s{font-size:12px; color:var(--ink-2); margin-top:3px}
+
+/* ---------- controls ---------- */
+.controls{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:var(--surface)}
+.seg button{border:0; background:transparent; color:var(--ink-2); font:inherit; font-size:13px;
+  padding:7px 13px; cursor:pointer; border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent-soft); color:var(--accent); font-weight:500}
+.seg button:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+select,input[type=search]{font:inherit; font-size:13px; padding:7px 10px; border-radius:8px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink)}
+select:focus-visible,input:focus-visible{outline:2px solid var(--accent); outline-offset:1px}
+
+/* ---------- panels ---------- */
+.grid{display:grid; grid-template-columns:1.32fr 1fr; gap:16px; align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+  padding:16px 18px 18px; box-shadow:var(--shadow); margin-bottom:16px}
+.panel-head{display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:4px}
+.panel p.hint{margin:2px 0 12px; color:var(--ink-3); font-size:12.5px}
+
+/* ---------- map ---------- */
+.mapwrap{position:relative}
+svg.map{width:100%; height:auto; display:block; touch-action:none}
+.mapdot{cursor:pointer}
+.mapdot:hover{stroke:var(--ink); stroke-width:1.2}
+.legend{display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:10px; font-size:12px; color:var(--ink-2)}
+.legend .sw{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px}
+.sizekey{display:flex; align-items:flex-end; gap:8px; color:var(--ink-3)}
+.tip{position:absolute; pointer-events:none; background:var(--surface); border:1px solid var(--line);
+  border-radius:8px; padding:9px 11px; font-size:12.5px; box-shadow:var(--shadow); min-width:170px; z-index:5}
+.tip .t{font-weight:600; margin-bottom:3px}
+.tip .r{display:flex; justify-content:space-between; gap:14px; color:var(--ink-2)}
+
+/* ---------- charts ---------- */
+svg.chart{width:100%; height:auto; display:block; overflow:visible}
+.axis{fill:var(--ink-3); font-size:10.5px; font-family:"IBM Plex Mono",monospace}
+.gridline{stroke:var(--line); stroke-width:1}
+
+/* ---------- table ---------- */
+.tablewrap{overflow:auto; max-height:min(70vh,620px); border:1px solid var(--line);
+  border-radius:var(--r); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:13px; min-width:820px}
+th,td{padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+thead th{position:sticky; top:0; background:var(--surface-2); color:var(--ink-2); font-weight:500;
+  font-size:12px; cursor:pointer; user-select:none}
+thead th:hover{color:var(--accent)}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.sel{background:var(--accent-soft)}
+td.n{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+.chip{display:inline-block; padding:1px 7px; border-radius:20px; font-size:11px; border:1px solid transparent}
+.chip.s{background:color-mix(in srgb, var(--solar) 18%, transparent); color:var(--solar); border-color:color-mix(in srgb, var(--solar) 40%, transparent)}
+.chip.e{background:color-mix(in srgb, var(--eolica) 18%, transparent); color:var(--eolica); border-color:color-mix(in srgb, var(--eolica) 40%, transparent)}
+
+/* ---------- notes ---------- */
+.note{background:var(--warn-bg); border:1px solid color-mix(in srgb,var(--warn) 35%, transparent);
+  color:var(--warn); border-radius:var(--r); padding:11px 14px; font-size:12.5px; margin-bottom:16px}
+footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--ink-3); font-size:12.5px}
+footer a{color:var(--accent)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important; animation:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Curtailment no SIN</h1>
+    <p class="lede">Energia eólica e solar cortada por ordem do ONS — quanto deixou de ser
+      gerado, onde, por qual razão, e quanto isso valeria ao PLD da hora.</p>
+    <div class="meta">
+      <span>Período <b id="m-periodo">—</b></span>
+      <span>Atualizado <b id="m-atualizado">—</b></span>
+      <span>Fonte <b>ONS Dados Abertos · CCEE</b></span>
+    </div>
+  </div>
+  <div class="actions">
+    <a class="btn primary" id="dl-xlsx" href="#" download>Baixar Excel (solar)</a>
+    <button class="btn" id="dl-csv" type="button">Baixar CSV da tabela</button>
+  </div>
+</header>
+
+<div id="aviso" class="note" hidden></div>
+
+<div class="stats" id="stats"></div>
+
+<div class="controls">
+  <div class="seg" role="group" aria-label="Fonte">
+    <button type="button" data-fonte="" aria-pressed="true">Tudo</button>
+    <button type="button" data-fonte="S" aria-pressed="false">Solar</button>
+    <button type="button" data-fonte="E" aria-pressed="false">Eólica</button>
+  </div>
+  <select id="f-sub" aria-label="Submercado"><option value="">Todos os submercados</option></select>
+  <select id="f-mes" aria-label="Mês"><option value="">Todo o período</option></select>
+  <input type="search" id="f-busca" placeholder="Buscar conjunto…" aria-label="Buscar conjunto">
+</div>
+
+<div class="grid">
+  <div class="panel mapwrap">
+    <div class="panel-head"><h2>Onde o corte acontece</h2></div>
+    <p class="hint">Cada círculo é um conjunto de usinas, na coordenada da subestação coletora
+      informada pelo ONS. A área é proporcional à energia não gerada.</p>
+    <svg class="map" id="map" viewBox="0 0 560 520" role="img"
+         aria-label="Mapa do Brasil com os conjuntos de usinas afetados por curtailment"></svg>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--solar)"></span>Solar</span>
+      <span><span class="sw" style="background:var(--eolica)"></span>Eólica</span>
+      <span class="sizekey" id="sizekey"></span>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <div class="panel-head"><h2>Por que cortaram</h2></div>
+      <p class="hint">Energia não gerada por razão de restrição declarada pelo ONS.</p>
+      <svg class="chart" id="ch-razao" viewBox="0 0 420 220"></svg>
+      <div class="legend" id="lg-razao"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Maiores conjuntos</h2></div>
+      <p class="hint">Top 8 por energia não gerada no recorte selecionado.</p>
+      <svg class="chart" id="ch-top" viewBox="0 0 420 250"></svg>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Dia a dia</h2><span class="num" id="ch-dia-tot" style="color:var(--ink-3);font-size:12px"></span></div>
+  <p class="hint">Energia não gerada por dia, empilhada por razão da restrição.</p>
+  <svg class="chart" id="ch-dia" viewBox="0 0 1140 260"></svg>
+</div>
+
+<div class="panel" style="padding:16px 0 0">
+  <div class="panel-head" style="padding:0 18px"><h2>Conjuntos</h2>
+    <span id="tab-count" class="num" style="color:var(--ink-3);font-size:12px"></span></div>
+  <p class="hint" style="padding:0 18px">Clique em uma linha para destacá-la no mapa.</p>
+  <div class="tablewrap"><table id="tab">
+    <thead><tr>
+      <th data-k="nome">Conjunto</th><th data-k="fonte">Fonte</th><th data-k="sub">Sub.</th>
+      <th data-k="uf">UF</th><th data-k="cap">Cap. (MW)</th><th data-k="mwh">MWh não gerados</th>
+      <th data-k="pct">% do potencial</th><th data-k="rs">Valor (R$)</th><th data-k="top">Razão principal</th>
+    </tr></thead><tbody></tbody>
+  </table></div>
+</div>
+
+<footer>
+  <p><b>Como o valor é calculado.</b> Energia não gerada (GNRa × 0,5 h, em MWh) multiplicada pelo
+  PLD do submercado na hora do evento. É o valor de mercado da energia perdida — um custo de
+  oportunidade — e não o ressarcimento de constrained-off apurado pela CCEE, que segue regras
+  próprias e em geral remunera apenas parte das restrições.</p>
+  <p><b>Fontes.</b>
+  <a href="https://dados.ons.org.br/dataset/restricao_coff_fotovoltaica">ONS — constrained-off fotovoltaica</a> ·
+  <a href="https://dados.ons.org.br/dataset/restricao_coff_eolica_usi">ONS — constrained-off eólica</a> ·
+  <a href="https://dados.ons.org.br/dataset/fator-capacidade-2">ONS — fator de capacidade 2 (coordenadas)</a> ·
+  <a href="https://dadosabertos.ccee.org.br/dataset/pld_horario_submercado">CCEE — PLD horário</a>.
+  Dados sob licença CC-BY. Os dados do ONS passam por consistência recorrente e podem mudar após a publicação.</p>
+</footer>
+</div>
+
+<script id="payload" type="application/json">__PAYLOAD__</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById("payload").textContent);
+const RZ = [["REL","Indisponibilidade externa","--rel"],["CNF","Confiabilidade","--cnf"],
+            ["ENE","Razão energética","--ene"],["PAR","Parecer de acesso","--par"]];
+const SUBN = {N:"Norte", NE:"Nordeste", S:"Sul", SE:"Sudeste/CO"};
+const cv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nf = (v,d=0) => v.toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const brl = v => v>=1e6 ? "R$ "+nf(v/1e6,1)+" mi" : "R$ "+nf(v,0);
+const mwh = v => v>=1e6 ? nf(v/1e6,2)+" TWh" : v>=1e3 ? nf(v/1e3,1)+" GWh" : nf(v,0)+" MWh";
+
+const CJ = D.conjuntos, CJI = {}; CJ.forEach((c,i)=>CJI[c.id]=i);
+const state = {fonte:"", sub:"", mes:"", q:"", sel:null, sort:"mwh", desc:true};
+
+/* ---------------- filtering ---------------- */
+function rowsMensal(){
+  return D.mensal.filter(r=>{
+    const c = CJ[r[0]];
+    if(state.fonte && c.fonte!==state.fonte) return false;
+    if(state.sub && c.sub!==state.sub) return false;
+    if(state.mes && r[1]!==state.mes) return false;
+    if(state.q && !(c.nome.toLowerCase().includes(state.q) || c.id.toLowerCase().includes(state.q))) return false;
+    return true;
+  });
+}
+function byConjunto(){
+  const m = new Map();
+  for(const r of rowsMensal()){
+    const c = CJ[r[0]];
+    let o = m.get(c.id);
+    if(!o){ o = {...c, mwh:0, REL:0, CNF:0, ENE:0, PAR:0, rs:0, ref:0}; m.set(c.id,o); }
+    o.mwh += r[2]; o.REL += r[3]; o.CNF += r[4]; o.ENE += r[5]; o.PAR += r[6];
+    o.rs += r[7]; o.ref += r[8];
+  }
+  for(const o of m.values()){
+    o.pct = o.ref>0 ? o.mwh/o.ref : 0;
+    o.top = RZ.map(([k])=>[k,o[k]]).sort((a,b)=>b[1]-a[1])[0][0];
+  }
+  return [...m.values()];
+}
+function rowsDiario(){
+  return D.diario.filter(r=>{
+    if(state.fonte && r[0]!==state.fonte) return false;
+    if(state.sub && r[2]!==state.sub) return false;
+    if(state.mes && !r[1].startsWith(state.mes)) return false;
+    return true;
+  });
+}
+
+/* ---------------- stats ---------------- */
+function drawStats(list){
+  const tot = list.reduce((a,c)=>a+c.mwh,0);
+  const rs  = list.reduce((a,c)=>a+c.rs,0);
+  const ref = list.reduce((a,c)=>a+c.ref,0);
+  const nz  = list.filter(c=>c.mwh>0).length;
+  const rz  = {}; RZ.forEach(([k])=>rz[k]=list.reduce((a,c)=>a+c[k],0));
+  const top = RZ.map(([k,l])=>[l,rz[k]]).sort((a,b)=>b[1]-a[1])[0];
+  const tiles = [
+    ["Energia não gerada", mwh(tot), ref>0 ? nf(100*tot/ref,1)+"% do que poderia ter sido gerado" : ""],
+    ["Valor ao PLD", brl(rs), tot>0 ? "R$ "+nf(rs/tot,0)+"/MWh no período" : ""],
+    ["Conjuntos com corte", nf(nz), "de "+nf(list.length)+" no recorte"],
+    ["Razão dominante", top[0], tot>0 ? nf(100*top[1]/tot,0)+"% da energia cortada" : "", true],
+  ];
+  document.getElementById("stats").innerHTML = tiles.map(t=>
+    `<div class="stat"><div class="k">${t[0]}</div><div class="v ${t[3]?"txt":"num"}">${t[1]}</div><div class="s">${t[2]}</div></div>`).join("");
+}
+
+/* ---------------- map ---------------- */
+const BR = [[4.5,-51.6],[2.2,-50.9],[1.9,-55.9],[4.1,-59.9],[5.2,-60.7],[4.5,-61.5],[0.7,-66.9],
+ [3.2,-65.4],[1.2,-69.8],[-1.5,-69.9],[-4.2,-69.9],[-7.2,-73.8],[-9.4,-72.9],[-11.0,-68.7],
+ [-10.4,-65.4],[-12.5,-64.2],[-13.5,-60.5],
+ [-16.3,-58.4],[-19.0,-57.6],[-22.0,-57.9],[-24.0,-54.3],[-25.6,-54.6],[-27.2,-53.7],[-30.2,-57.6],
+ [-33.7,-53.4],[-32.2,-52.1],[-29.3,-49.7],[-25.5,-48.5],[-23.0,-44.3],[-22.9,-42.0],[-20.6,-40.4],
+ [-18.0,-39.2],[-13.0,-38.5],[-9.6,-35.2],[-7.1,-34.8],[-5.1,-35.5],[-2.8,-40.5],[-1.2,-44.3],
+ [-0.6,-47.3],[-1.0,-48.5],[0.0,-50.0],[2.0,-50.5]];
+const LON0=-74.5, LON1=-33.5, LAT0=-34.5, LAT1=6.0, W=560, H=520;
+const px = (lat,lon)=>[ (lon-LON0)/(LON1-LON0)*W, (LAT1-lat)/(LAT1-LAT0)*H ];
+
+function drawMap(list){
+  const svg = document.getElementById("map");
+  const max = Math.max(1, ...list.map(c=>c.mwh));
+  const rad = v => v<=0 ? 0 : 2.2 + 19*Math.sqrt(v/max);
+  const outline = BR.map(p=>px(p[0],p[1]).map(n=>n.toFixed(1)).join(",")).join(" ");
+  const pts = list.filter(c=>c.lat && c.mwh>0).sort((a,b)=>b.mwh-a.mwh);
+  svg.innerHTML =
+    `<polygon points="${outline}" fill="var(--sunk)" stroke="var(--line)" stroke-width="1.2"/>` +
+    pts.map(c=>{
+      const [x,y]=px(c.lat,c.lon);
+      const col = c.fonte==="S" ? "var(--solar)" : "var(--eolica)";
+      return `<circle class="mapdot" data-id="${c.id}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad(c.mwh).toFixed(1)}"
+        fill="${col}" fill-opacity="${state.sel && state.sel!==c.id ? .18 : .55}"
+        stroke="${col}" stroke-opacity=".9" stroke-width="${state.sel===c.id?2:.8}"/>`;
+    }).join("");
+  const key = [max, max/4].map(v=>{
+    const s = (2*rad(v)).toFixed(0);
+    return `<span style="display:inline-block;width:${s}px;height:${s}px;border:1px solid var(--ink-3);border-radius:50%"></span>`;
+  });
+  document.getElementById("sizekey").innerHTML = key.join("") + `<span>${mwh(max)} · ${mwh(max/4)}</span>`;
+
+  const tipEl = ensureTip();
+  svg.onmousemove = e=>{
+    const t = e.target.closest(".mapdot");
+    if(!t){ tipEl.hidden = true; return; }
+    const c = list.find(x=>x.id===t.dataset.id); if(!c) return;
+    tipEl.hidden = false;
+    tipEl.innerHTML = `<div class="t">${c.nome}</div>
+      <div class="r"><span>${c.fonte==="S"?"Solar":"Eólica"} · ${c.uf} · ${SUBN[c.sub]||c.sub}</span></div>
+      <div class="r"><span>Não gerado</span><b class="num">${mwh(c.mwh)}</b></div>
+      <div class="r"><span>Valor</span><b class="num">${brl(c.rs)}</b></div>
+      <div class="r"><span>% do potencial</span><b class="num">${nf(100*c.pct,1)}%</b></div>`;
+    const box = svg.getBoundingClientRect();
+    tipEl.style.left = Math.min(box.width-190, e.clientX-box.left+14)+"px";
+    tipEl.style.top  = Math.max(0, e.clientY-box.top-10)+"px";
+  };
+  svg.onmouseleave = ()=>{ tipEl.hidden = true; };
+  svg.onclick = e=>{
+    const t = e.target.closest(".mapdot");
+    state.sel = (t && state.sel!==t.dataset.id) ? t.dataset.id : null;
+    render();
+  };
+}
+function ensureTip(){
+  let t = document.querySelector(".tip");
+  if(!t){ t = document.createElement("div"); t.className="tip"; t.hidden=true;
+          document.querySelector(".mapwrap").appendChild(t); }
+  return t;
+}
+
+/* ---------------- charts ---------------- */
+function drawRazao(list){
+  const svg = document.getElementById("ch-razao");
+  const vals = RZ.map(([k,l,c])=>({k,l,c,v:list.reduce((a,o)=>a+o[k],0)})).filter(d=>d.v>0);
+  const tot = vals.reduce((a,d)=>a+d.v,0) || 1;
+  const W=420, barH=13, rowH=40, x1=420;
+  let y=10, out="";
+  vals.sort((a,b)=>b.v-a.v);
+  for(const d of vals){
+    const w = x1*d.v/tot;
+    out += `<text x="0" y="${y}" style="font-family:'IBM Plex Sans';font-size:12px" fill="var(--ink-2)">${d.l}</text>`;
+    out += `<text class="axis" x="${x1}" y="${y}" text-anchor="end" style="font-size:11.5px" fill="var(--ink-3)">${nf(100*d.v/tot,1)}% · ${mwh(d.v)}</text>`;
+    out += `<rect x="0" y="${y+7}" width="${x1}" height="${barH}" rx="3" fill="var(--sunk)"/>`;
+    out += `<rect x="0" y="${y+7}" width="${Math.max(3,w)}" height="${barH}" rx="3" fill="var(${d.c})" fill-opacity=".9"/>`;
+    y += rowH;
+  }
+  svg.setAttribute("viewBox",`0 0 ${W} ${Math.max(80,y-14)}`);
+  svg.innerHTML = out || `<text class="axis" x="0" y="20">Sem restrições no recorte</text>`;
+  document.getElementById("lg-razao").innerHTML = RZ.map(([k,l,c])=>
+    `<span><span class="sw" style="background:var(${c})"></span>${k} — ${l}</span>`).join("");
+}
+
+function drawTop(list){
+  const svg = document.getElementById("ch-top");
+  const top = [...list].sort((a,b)=>b.mwh-a.mwh).slice(0,8).filter(c=>c.mwh>0);
+  const max = Math.max(1,...top.map(c=>c.mwh));
+  const W=420, rowH=28, labelW=0;
+  let out="", y=4;
+  for(const c of top){
+    const w = 300*c.mwh/max;
+    const col = c.fonte==="S" ? "var(--solar)" : "var(--eolica)";
+    out += `<text class="axis" x="0" y="${y+9}" style="font-family:'IBM Plex Sans';font-size:11.5px" fill="var(--ink-2)">${c.nome.replace(/^Conj\.\s*/,"").slice(0,34)}</text>`;
+    out += `<rect x="0" y="${y+13}" width="${Math.max(2,w)}" height="9" rx="2" fill="${col}" fill-opacity=".8"/>`;
+    out += `<text class="axis" x="${Math.max(2,w)+7}" y="${y+21}" fill="var(--ink-3)">${mwh(c.mwh)}</text>`;
+    y += rowH;
+  }
+  svg.setAttribute("viewBox",`0 0 ${W} ${Math.max(60,y)}`);
+  svg.innerHTML = out || `<text class="axis" x="0" y="20">Sem dados</text>`;
+}
+
+function drawDia(){
+  const svg = document.getElementById("ch-dia");
+  const rows = rowsDiario();
+  const byDay = new Map();
+  for(const r of rows){
+    let o = byDay.get(r[1]); if(!o){ o={d:r[1],REL:0,CNF:0,ENE:0,PAR:0,t:0}; byDay.set(r[1],o); }
+    o.REL+=r[4]; o.CNF+=r[5]; o.ENE+=r[6]; o.PAR+=r[7]; o.t+=r[3];
+  }
+  const days = [...byDay.values()].sort((a,b)=>a.d<b.d?-1:1);
+  const W=1140, H=260, PB=26, PT=12, PL=52;
+  const max = Math.max(1,...days.map(d=>d.t));
+  const bw = days.length ? Math.max(1,(W-PL-6)/days.length) : 1;
+  const yv = v => PT + (H-PT-PB)*(1-v/max);
+  let out="";
+  const ticks=4;
+  for(let i=0;i<=ticks;i++){
+    const v = max*i/ticks, y = yv(v);
+    out += `<line class="gridline" x1="${PL}" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}"/>`;
+    out += `<text class="axis" x="${PL-8}" y="${(y+3.5).toFixed(1)}" text-anchor="end">${v>=1000?nf(v/1000,0)+"k":nf(v,0)}</text>`;
+  }
+  out += `<text class="axis" x="${PL-8}" y="${PT-2}" text-anchor="end">MWh</text>`;
+  days.forEach((d,i)=>{
+    const x = PL + i*bw; let acc=0;
+    for(const [k,,c] of RZ){
+      if(d[k]<=0) continue;
+      const h = (H-PT-PB)*d[k]/max;
+      out += `<rect x="${x.toFixed(1)}" y="${(yv(acc)-h).toFixed(1)}" width="${Math.max(.8,bw-1).toFixed(1)}" height="${h.toFixed(1)}" fill="var(${c})" fill-opacity=".88"><title>${d.d} · ${k} · ${mwh(d[k])}</title></rect>`;
+      acc += d[k];
+    }
+    const step = days.length>60 ? 7 : days.length>20 ? 3 : 1;
+    if(i%step===0)
+      out += `<text class="axis" x="${(x+bw/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${d.d.slice(8)}/${d.d.slice(5,7)}</text>`;
+  });
+  svg.innerHTML = out || `<text class="axis" x="0" y="20">Sem dados</text>`;
+  const tot = days.reduce((a,d)=>a+d.t,0);
+  document.getElementById("ch-dia-tot").textContent = days.length ? `${days.length} dias · ${mwh(tot)}` : "";
+}
+
+/* ---------------- table ---------------- */
+let tableRows = [];
+function drawTable(list){
+  const k = state.sort;
+  tableRows = [...list].sort((a,b)=>{
+    const va=a[k], vb=b[k];
+    const r = typeof va==="string" ? va.localeCompare(vb,"pt-BR") : va-vb;
+    return state.desc ? -r : r;
+  });
+  const tb = document.querySelector("#tab tbody");
+  tb.innerHTML = tableRows.map(c=>`<tr data-id="${c.id}" class="${state.sel===c.id?"sel":""}">
+    <td>${c.nome}</td>
+    <td><span class="chip ${c.fonte==="S"?"s":"e"}">${c.fonte==="S"?"Solar":"Eólica"}</span></td>
+    <td>${SUBN[c.sub]||c.sub}</td><td>${c.uf}</td>
+    <td class="n">${c.cap?nf(c.cap,0):"—"}</td>
+    <td class="n">${nf(c.mwh,0)}</td>
+    <td class="n">${c.ref>0?nf(100*c.pct,1)+"%":"—"}</td>
+    <td class="n">${c.rs>0?nf(c.rs,0):"—"}</td>
+    <td>${c.mwh>0?c.top:"—"}</td></tr>`).join("");
+  document.getElementById("tab-count").textContent = `${nf(tableRows.length)} conjuntos`;
+  tb.onclick = e=>{
+    const tr = e.target.closest("tr"); if(!tr) return;
+    state.sel = state.sel===tr.dataset.id ? null : tr.dataset.id;
+    render();
+  };
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  const list = byConjunto();
+  drawStats(list); drawMap(list); drawRazao(list); drawTop(list); drawDia(); drawTable(list);
+}
+
+/* ---------------- init ---------------- */
+function init(){
+  document.getElementById("m-periodo").textContent = D.meta.periodo;
+  document.getElementById("m-atualizado").textContent = D.meta.atualizado;
+  const dl = document.getElementById("dl-xlsx");
+  if(D.meta.xlsx){ dl.href = D.meta.xlsx; } else { dl.remove(); }
+  if(D.meta.downloads === false){ document.getElementById("dl-csv").remove(); }
+  if(D.meta.aviso){ const a=document.getElementById("aviso"); a.hidden=false; a.innerHTML=D.meta.aviso; }
+
+  const subs = [...new Set(CJ.map(c=>c.sub))].sort();
+  document.getElementById("f-sub").innerHTML =
+    `<option value="">Todos os submercados</option>` +
+    subs.map(s=>`<option value="${s}">${SUBN[s]||s}</option>`).join("");
+  const meses = [...new Set(D.mensal.map(r=>r[1]))].sort().reverse();
+  document.getElementById("f-mes").innerHTML =
+    `<option value="">Todo o período</option>` +
+    meses.map(m=>`<option value="${m}">${m.slice(5)}/${m.slice(0,4)}</option>`).join("");
+
+  document.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{
+    state.fonte = b.dataset.fonte;
+    document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed", String(x===b)));
+    render();
+  });
+  document.getElementById("f-sub").onchange = e=>{ state.sub=e.target.value; render(); };
+  document.getElementById("f-mes").onchange = e=>{ state.mes=e.target.value; render(); };
+  let t; document.getElementById("f-busca").oninput = e=>{
+    clearTimeout(t); t=setTimeout(()=>{ state.q=e.target.value.trim().toLowerCase(); render(); },180);
+  };
+  document.querySelectorAll("#tab thead th").forEach(th=>th.onclick=()=>{
+    const k = th.dataset.k;
+    if(state.sort===k) state.desc = !state.desc; else { state.sort=k; state.desc=true; }
+    render();
+  });
+  document.getElementById("dl-csv").onclick = ()=>{
+    const head = ["conjunto","id_ons","fonte","submercado","uf","capacidade_mw","mwh_nao_gerado",
+                  "pct_do_potencial","valor_rs","razao_principal","latitude","longitude"];
+    const body = tableRows.map(c=>[c.nome,c.id,c.fonte==="S"?"Solar":"Eólica",c.sub,c.uf,
+      c.cap??"",c.mwh.toFixed(2),(100*c.pct).toFixed(2),c.rs.toFixed(2),c.top,c.lat??"",c.lon??""]);
+    const csv = [head, ...body].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));
+    const a = document.createElement("a"); a.href=url; a.download="curtailment_conjuntos.csv";
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  render();
+}
+init();
+})();
+</script>

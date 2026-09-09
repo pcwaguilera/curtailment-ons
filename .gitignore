@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+_sample_*.psv
+_payload.json
+_shot*.png
+_crop*.png

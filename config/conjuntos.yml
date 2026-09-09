@@ -1,0 +1,18 @@
+# Conjuntos fotovoltaicos que entram no Excel.
+#
+# Use o id_ons (recomendado — é estável) ou o nome exato do conjunto como o ONS
+# publica. Os dois funcionam; o id_ons não muda se o ONS renomear a usina.
+#
+# Para descobrir os ids, abra o dashboard, filtre por Solar e olhe a coluna
+# "Conjunto" — ou baixe o CSV da tabela, que traz id_ons em cada linha.
+#
+# Deixe a lista vazia e o Excel sai com todos os conjuntos fotovoltaicos.
+# Depois de mudar esta lista, rode o workflow com "full = true" uma vez, para
+# reconstruir o detalhe semi-horário dos conjuntos novos.
+
+conjuntos_solar:
+  # - CJU_MGJAN        # Conj. Janaúba
+  # - CJU_MGARN        # Conj. Arinos 2 500 kV
+  # - CJU_RNASO        # Conj. Assu Sol
+  # - CJU_PI5FGID      # Conj. Gilbués II 500 kV
+  # - CJU_BABRD        # Conj. Barreiras II 500 kV
